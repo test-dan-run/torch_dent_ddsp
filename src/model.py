@@ -1,7 +1,7 @@
 import torch
 from typing import Dict
 
-from .core import DynamicRangeCompressor, FIRFilter, FilteredNoise, Distortion
+from core import DynamicRangeCompressor, FIRFilter, FilteredNoise, Distortion
 
 class DENT(torch.nn.Module):
     def __init__(
@@ -37,3 +37,32 @@ class DENT(torch.nn.Module):
             output = output + noise
 
         return output
+
+if __name__ == '__main__':
+
+    dent = DENT(
+        waveshaper_config = {
+            'threshold': 15.0,
+        },
+        compressor_config = {
+            'sample_rate': 16000,
+            'threshold': -10,
+            'ratio': 30.0,
+            'makeup': 0.0,
+            'attack': 1.0e-7,
+            'release': 1.0e-3,
+            'downsample_factor': 2.0
+        },
+        equalizer_config = {
+            'n_frequency_bins': 1000,
+        },
+        noise_config = {
+            'n_frequency_bins': 1000
+        }
+    )
+
+    batch_tensor = torch.rand(size=(4, 1, 16000))
+    with torch.no_grad():
+        out = dent(batch_tensor)
+    print(out.shape)
+    print(out)

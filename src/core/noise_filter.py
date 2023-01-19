@@ -38,6 +38,6 @@ class FilteredNoise(torch.nn.Module):
         else:
             magnitudes = self.magnitudes + self.bias
         
-        noise = nn.init.uniform_(torch.tensor([magnitudes.size(0), audio.size(-1)]), a=-0.0, b=1.0)
+        noise = nn.init.uniform_(torch.empty(size=audio.size()), a=-0.0, b=1.0)
 
         return frequency_filter(noise, magnitudes, window_size=self.window_size)

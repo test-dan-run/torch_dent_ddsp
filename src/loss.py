@@ -8,14 +8,15 @@ class SpectralLoss(nn.Module):
     def __init__(
         self, 
         fft_sizes: List[int] = [2048, 1024, 512, 256, 128, 64],
-        loss_type: str = 'l1',
         magnitude_weight: float = 1.0,
         log_magnitude_weight: float = 0.0,
     ):
         
         super(SpectralLoss, self).__init__()
+        assert (magnitude_weight > 0 and log_magnitude_weight == 0) or (magnitude_weight == 0 and log_magnitude_weight > 0), \
+                  'Only either magnitude_weight or log_magnitude_weight can be more than 0'
+
         self.fft_sizes = fft_sizes
-        self.loss_type = loss_type
         self.mag_weight = magnitude_weight
         self.logmag_weight = log_magnitude_weight
 
@@ -26,6 +27,37 @@ class SpectralLoss(nn.Module):
 
         return torch.log(safe_x)
     
-    def stft(self, audio: torch.Tensor, frame_size: int = 2048, overlap: float = 0.75, pad_end: bool = True) -> torch.Tensor:
+    def stft(self, audio: torch.Tensor, frame_size: int = 2048, overlap: float = 0.75) -> torch.Tensor:
 
-        pass
+        return torch.stft(
+            audio, n_fft=frame_size,
+            hop_length=int(frame_size * (1-overlap)),
+            win_length=frame_size,
+        )
+    
+    def mean_difference(self, true: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+
+        diff = true - pred
+        return torch.mean(torch.abs(diff))
+    
+    def __call__(self, true: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+
+        loss: float = 0.0
+        # compute loss for each fft size
+        for fft_size in self.fft_sizes:
+
+            true_mag = self.stft(true, frame_size=fft_size, overlap=0.75)
+            pred_mag = self.stft(pred, frame_size=fft_size, overlap=0.75)
+
+            true_mag = torch.abs(true_mag)
+            pred_mag = torch.abs(pred_mag)
+
+            if self.mag_weight > 0:
+                loss += self.mag_weight * self.mean_difference(true_mag, pred_mag)
+            
+            if self.logmag_weight > 0:
+                true_mag = self.safe_log(true_mag)
+                pred_mag = self.safe_log(pred_mag)
+                loss += self.logmag_weight * self.mean_difference(true_mag, pred_mag)
+
+        return loss

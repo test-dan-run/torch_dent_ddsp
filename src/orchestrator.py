@@ -1,28 +1,21 @@
-from typing import List
-
-import torch
-import torch.nn as nn
-from sklearn import metrics
 from torch.optim import Adam
 from omegaconf import DictConfig
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+import torch
 import pytorch_lightning as pl
 
-from .src.model import DENT
+from model import DENT
+from loss import SpectralLoss
 
-class LightningWALNet(pl.LightningModule):
-    def __init__(self, model_cfg: DictConfig, optim_cfg: DictConfig, run_cfg: DictConfig):
+class LightningDENT(pl.LightningModule):
+    def __init__(self, cfg: DictConfig):
 
-        super(LightningWALNet, self).__init__()
+        super(LightningDENT, self).__init__()
 
-        self.model = WALNet(**model_cfg)
-        self.model.xavier_init()
-
-        self.loss_fn = nn.BCELoss()
-        
-        self.optim_cfg = optim_cfg
-        self.run_cfg = run_cfg
+        self.cfg = cfg
+        self.model = DENT(**cfg.model)
+        self.loss_fn = SpectralLoss()
 
     def forward(self, batch):
         
@@ -54,25 +47,6 @@ class LightningWALNet(pl.LightningModule):
         
         return {'predictions': out, 'labels': y, 'loss': loss}	
 
-    def validation_epoch_end(self, validation_step_outputs):
-
-        labels_list = [x['labels'] for x in validation_step_outputs]
-        preds_list = [x['predictions'] for x in validation_step_outputs]
-
-        y_true = torch.cat(labels_list).cpu().numpy()
-        y_pred = torch.cat(preds_list).cpu().numpy()
-        print(y_true.shape)
-        print(y_pred.shape)
-
-        val_ap = metrics.average_precision_score(y_true, y_pred)
-        try:
-            val_auc = metrics.roc_auc_score(y_true, y_pred)
-        except:
-            val_auc = 0.0
-
-        self.log('valid_ap', val_ap, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
-        self.log('valid_auc', val_auc, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
-
     def test_step(self, batch, batch_idx):
 
         x, y = batch
@@ -83,50 +57,63 @@ class LightningWALNet(pl.LightningModule):
         
         return {'predictions': out, 'labels': y, 'loss': loss}	
 
-    def test_epoch_end(self, test_step_outputs):
-
-        labels_list = [x['labels'] for x in test_step_outputs]
-        preds_list = [x['predictions'] for x in test_step_outputs]
-
-        y_true = torch.cat(labels_list).cpu().numpy()
-        y_pred = torch.cat(preds_list).cpu().numpy()
-
-        test_ap = metrics.average_precision_score(y_true, y_pred)
-        try:    
-            test_auc = metrics.roc_auc_score(y_true, y_pred)
-        except:
-            test_auc = 0.0
-
-        self.log('test_ap', test_ap, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
-        self.log('test_auc', test_auc, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
-
     def configure_optimizers(self):
 
-        if self.optim_cfg.optim == 'adam':
-            optim = Adam(self.parameters(), lr = self.optim_cfg.lr)
-
-        if self.optim_cfg.scheduler == 'decay':
-            scheduler = ReduceLROnPlateau(
-                optimizer = optim,
-                mode = self.optim_cfg.mode,
-                factor = self.optim_cfg.factor,
-                patience = self.optim_cfg.patience,
-                cooldown = self.optim_cfg.cooldown,
-                eps = self.optim_cfg.eps
-            )
-        elif self.optim_cfg.scheduler == 'cyclic':
-            scheduler = CyclicLR(
-                optimizer = optim,
-                mode = self.optim_cfg.mode,
-                lr = self.optim_cfg.lr,
-                max_lr = self.optim_cfg.max_lr,
-                epoch_size_up = self.optim_cfg.epoch_size_up,
-                epoch_size_down = self.optim_cfg.epoch_size_down
-            )
+        optimizer = Adam(self.parameters(), lr=self.cfg.optim.lr)
+        scheduler = ReduceLROnPlateau(
+            optimizer = optimizer,
+            mode = self.cfg.optim.mode,
+            factor = self.cfg.optim.factor,
+            patience = self.cfg.optim.patience,
+            cooldown = self.cfg.optim.cooldown,
+            eps = self.cfg.optim.eps
+        )
 
         return {
-            'optimizer': optim,
+            'optimizer': optimizer,
             'monitor': 'valid_loss',
             'lr_scheduler': scheduler,
-            'interval': self.optim_cfg.interval
+            'interval': self.cfg.optim.interval
         }
+
+if __name__ == '__main__':
+
+    from omegaconf import OmegaConf
+
+    cfg = {
+        'model': {
+            'waveshaper_config': {
+                'threshold': 15.0,
+            },
+            'compressor_config': {
+                'sample_rate': 16000,
+                'threshold': -10,
+                'ratio': 30.0,
+                'makeup': 0.0,
+                'attack': 1.0e-7,
+                'release': 1.0e-3,
+                'downsample_factor': 2.0
+            },
+            'equalizer_config': {
+                'n_frequency_bins': 1000,
+            },
+            'noise_config': {
+                'n_frequency_bins': 1000
+            }
+        },
+        'optim': {
+            'lr': 5.0e-4,
+            'mode': 'min',
+            'factor': 0.1,
+            'patience': 5,
+            'cooldown': 0,
+            'eps': 1.0e-7,
+            'interval': 'epoch'
+        }
+    }
+
+    cfg = OmegaConf.create(cfg)
+    lightning_dent = LightningDENT(cfg)
+    batch_tensor_1 = torch.rand(size=(4, 1, 16000))
+    batch_tensor_2 = torch.rand(size=(4, 1, 16000))
+    print(lightning_dent.training_step((batch_tensor_1, batch_tensor_2), 0))

@@ -63,15 +63,15 @@ class DynamicRangeCompressor(torch.nn.Module):
         super(DynamicRangeCompressor, self).__init__()
 
         self.sample_rate = sample_rate
-        self.threshold = Variable(torch.tensor([threshold]), requires_grad=True)
-        self.ratio = Variable(torch.tensor([ratio]), requires_grad=True)
-        self.makeup = Variable(torch.tensor([makeup]), requires_grad=True)
+        self.threshold = Variable(torch.tensor([threshold], dtype=torch.float32), requires_grad=True)
+        self.ratio = Variable(torch.tensor([ratio], dtype=torch.float32), requires_grad=True)
+        self.makeup = Variable(torch.tensor([makeup], dtype=torch.float32), requires_grad=True)
 
         attack_time =  torch.exp( -torch.log10(torch.Tensor([9.0])) ) / (sample_rate * attack  * 1.0e-3 * downsample_factor)
-        self.attack_time = Variable(torch.tensor([attack_time]), requires_grad=True)
+        self.attack_time = Variable(torch.tensor([attack_time], dtype=torch.float32), requires_grad=True)
         
         release_time = torch.exp( -torch.log10(torch.Tensor([9.0])) ) / (sample_rate * release * 1.0e-3 * downsample_factor)
-        self.release_time = Variable(torch.tensor([release_time]), requires_grad=True)
+        self.release_time = Variable(torch.tensor([release_time], dtype=torch.float32), requires_grad=True)
 
         self.downsample_factor = downsample_factor
 
