@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.autograd import Variable
 from typing import  Any
 
 from .utils import clip_by_value, frequency_filter
@@ -25,18 +24,18 @@ class FilteredNoise(torch.nn.Module):
                 size = (1, self.n_frames, self.n_frequency_bins)
             magnitude_init = torch.normal(mean=0.0, std=0.05, size=size)
             
-        self.magnitudes = Variable(magnitude_init, requires_grad=True)
+        self.noise_magnitudes = nn.Parameter(magnitude_init, requires_grad=True)
 
         if bias_init is None:
             bias_init = torch.normal(mean=0.0, std=0.05, size=(1,))
-        self.bias = Variable(bias_init, requires_grad=True)
+        self.bias = nn.Parameter(bias_init, requires_grad=True)
 
     def __call__(self, audio: torch.Tensor) -> torch.Tensor:
 
         if self.scale_fn:
-            magnitudes = self.scale_fn(self.magnitudes + self.bias)
+            magnitudes = self.scale_fn(self.noise_magnitudes + self.bias)
         else:
-            magnitudes = self.magnitudes + self.bias
+            magnitudes = self.noise_magnitudes + self.bias
         
         noise = nn.init.uniform_(torch.empty(size=audio.size()), a=-0.0, b=1.0)
 

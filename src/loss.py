@@ -29,6 +29,10 @@ class SpectralLoss(nn.Module):
     
     def stft(self, audio: torch.Tensor, frame_size: int = 2048, overlap: float = 0.75) -> torch.Tensor:
 
+        if audio.dim() == 3:
+            assert audio.size(1) == 1, f'input audio should be a 2D batch of time sequences: {audio.size()}'
+            audio = audio.squeeze(1)
+
         return torch.stft(
             audio, n_fft=frame_size,
             hop_length=int(frame_size * (1-overlap)),

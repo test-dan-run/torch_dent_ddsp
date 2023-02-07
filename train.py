@@ -9,17 +9,17 @@ from pytorch_lightning.plugins import DDPPlugin
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from src.datasets.lightning_datasets import LightningAudioSetDataset
+from src.datasets import LightningWavPairDataset
 from src.orchestrator import LightningDENT
 
 @hydra.main(config_path='configs', config_name='main')
 def main(cfg: DictConfig):
 
     # setup dataset
-    data_module = LightningAudioSetDataset(
+    data_module = LightningWavPairDataset(
         cfg.dataset, batch_size=cfg.run.batch_size,
         )
-    data_module.prepare_data()
+    # data_module.prepare_data()
 
     #########
     # TRAIN #

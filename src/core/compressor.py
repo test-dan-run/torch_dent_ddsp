@@ -1,6 +1,6 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 from .utils import overlap_and_add
 
@@ -36,7 +36,7 @@ def upsample_with_windows(
 
     # Constant overlap-add, half overlapping windows.
     window_length = 2 * upsample_factor
-    window = torch.hann_window(window_length)  # [window]
+    window = torch.hann_window(window_length).to('cuda')  # [window]
 
     # Broadcast multiply.
     # Add dimension for windows [batch_size, n_channels, n_frames, window].
@@ -63,15 +63,15 @@ class DynamicRangeCompressor(torch.nn.Module):
         super(DynamicRangeCompressor, self).__init__()
 
         self.sample_rate = sample_rate
-        self.threshold = Variable(torch.tensor([threshold], dtype=torch.float32), requires_grad=True)
-        self.ratio = Variable(torch.tensor([ratio], dtype=torch.float32), requires_grad=True)
-        self.makeup = Variable(torch.tensor([makeup], dtype=torch.float32), requires_grad=True)
+        self.compressor_threshold = nn.Parameter(torch.tensor([threshold], dtype=torch.float32), requires_grad=True)
+        self.ratio = nn.Parameter(torch.tensor([ratio], dtype=torch.float32), requires_grad=True)
+        self.makeup = nn.Parameter(torch.tensor([makeup], dtype=torch.float32), requires_grad=True)
 
-        attack_time =  torch.exp( -torch.log10(torch.Tensor([9.0])) ) / (sample_rate * attack  * 1.0e-3 * downsample_factor)
-        self.attack_time = Variable(torch.tensor([attack_time], dtype=torch.float32), requires_grad=True)
+        attack_time =  torch.exp( -torch.log10(torch.Tensor([9.0]))  / (sample_rate * attack  * 1.0e-3 * downsample_factor))
+        self.attack_time = nn.Parameter(torch.tensor([attack_time], dtype=torch.float32), requires_grad=True)
         
-        release_time = torch.exp( -torch.log10(torch.Tensor([9.0])) ) / (sample_rate * release * 1.0e-3 * downsample_factor)
-        self.release_time = Variable(torch.tensor([release_time], dtype=torch.float32), requires_grad=True)
+        release_time = torch.exp( -torch.log10(torch.Tensor([9.0]))  / (sample_rate * release * 1.0e-3 * downsample_factor))
+        self.release_time = nn.Parameter(torch.tensor([release_time], dtype=torch.float32), requires_grad=True)
 
         self.downsample_factor = downsample_factor
 
@@ -84,8 +84,8 @@ class DynamicRangeCompressor(torch.nn.Module):
 
         # compute gain based on threshold and ratio
         compressed_audio_db = torch.where(
-            torch.greater(audio_db, self.threshold),
-            self.threshold + ( (audio_db-self.threshold)/self.ratio ), audio_db 
+            torch.greater(audio_db, self.compressor_threshold),
+            self.compressor_threshold + ( (audio_db-self.compressor_threshold)/self.ratio ), audio_db 
             )
         gain = compressed_audio_db - audio_db # [batch, length]
         gain_downsampled = F.interpolate(gain, scale_factor=1/self.downsample_factor, mode = 'linear')
@@ -98,11 +98,11 @@ class DynamicRangeCompressor(torch.nn.Module):
 
         gain_downsampled_smoothed_upsampled = upsample_with_windows(gain_downsampled, int(self.downsample_factor))
 
-        smoothed_compressed_audio_db = audio_db + gain_downsampled_smoothed_upsampled[:,:,:gain.shape[2]] + self.makeup
+        smoothed_compressed_audio_db = audio_db + gain_downsampled_smoothed_upsampled[:,:,:audio_db.shape[-1]] + self.makeup
         smoothed_compressed_audio = 10.0 ** ((smoothed_compressed_audio_db)/20.0)
         smoothed_compressed_audio = torch.where(audio < 0, -smoothed_compressed_audio, smoothed_compressed_audio)
 
-        return smoothed_compressed_audio
+        return smoothed_compressed_audio.to('cuda')
 
 if __name__ == '__main__':
     drc = DynamicRangeCompressor(16000, -10.0, 30.0, 0.0, 1.0e-7, 1.0e-3, 2.0)

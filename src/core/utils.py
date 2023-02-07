@@ -36,14 +36,14 @@ def apply_window_to_impulse_response(impulse_response: torch.Tensor,
 	ir_size = int(impulse_response.shape[-1])
 	if (window_size <= 0) or (window_size > ir_size):
 		window_size = ir_size
-	window = torch.hann_window(window_size)
+	window = torch.hann_window(window_size).to('cuda')
 
 	# Zero pad the window and put in in zero-phase form.
 	padding = ir_size - window_size
 	if padding > 0:
 		half_idx = (window_size + 1) // 2
 		window = torch.concat([window[half_idx:],
-							torch.zeros([padding]),
+							torch.zeros([padding]).to('cuda'),
 							window[:half_idx]], dim=0)
 	else:
 		window = torch.fft.fftshift(window, dim=-1)
@@ -70,8 +70,8 @@ def complex_matmul(a: torch.Tensor, b: torch.Tensor, groups: int = 1) -> torch.T
     # dimensions. Dimensions 3 and higher will have the same shape after multiplication.
     # We also allow for "grouped" multiplications, where multiple sections of channels
     # are multiplied independently of one another (required for group convolutions).
-    a = a.view(a.size(0), groups, -1, *a.shape[2:])
-    b = b.view(groups, -1, *b.shape[1:])
+    a = a.view(a.size(0), groups, -1, *a.shape[2:]).to('cuda')
+    b = b.view(groups, -1, *b.shape[1:]).to('cuda')
 
     a = torch.movedim(a, 2, a.dim() - 1).unsqueeze(-2)
     b = torch.movedim(b, (1, 2), (b.dim() - 1, b.dim() - 2))
@@ -131,7 +131,7 @@ def overlap_and_add(signal: torch.Tensor, frame_step: int):
 
     frame = torch.arange(0, output_subframes).unfold(0, subframes_per_frame, subframe_step)
     # frame = signal.new_tensor(frame).long()  # signal may in GPU or CPU
-    frame = frame.contiguous().view(-1)
+    frame = frame.contiguous().view(-1).to('cuda')
 
     result = signal.new_zeros(*outer_dimensions, output_subframes, subframe_length)
     result.index_add_(-2, frame, subframe_signal)
@@ -249,11 +249,10 @@ def fft_convolve(audio: torch.Tensor,
 		number of impulse response frames is on the order of the audio size and
 		not a multiple of the audio size.)
 	"""
-
 	# Get shapes of audio.
 	if audio.dim() == 3:
 		if audio.size(1) == 1:
-			audio = torch.squeeze(audio)
+			audio = torch.squeeze(audio, dim=1)
 	batch_size, audio_size = audio.size()
 
 	# Add a frame dimension to impulse response if it doesn't have one.

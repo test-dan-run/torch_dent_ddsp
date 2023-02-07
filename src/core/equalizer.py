@@ -1,5 +1,5 @@
 import torch
-from torch.autograd import Variable
+import torch.nn as nn
 
 from .utils import clip_by_value, frequency_filter
 
@@ -21,14 +21,14 @@ class FIRFilter(torch.nn.Module):
 				size = (1, self.n_frames, self.n_frequency_bins)
 			magnitude_init = torch.normal(mean=0.0, std=0.05, size=size)
 			
-		self.magnitudes = Variable(magnitude_init, requires_grad=True)
+		self.fir_magnitudes = nn.Parameter(magnitude_init, requires_grad=True)
 
 	def __call__(self, audio: torch.Tensor) -> torch.Tensor:
 
 		if self.scale_fn:
-			magnitudes = self.scale_fn(self.magnitudes)
+			magnitudes = self.scale_fn(self.fir_magnitudes)
 		else:
-			magnitudes = self.magnitudes
+			magnitudes = self.fir_magnitudes
 
 		return frequency_filter(audio, magnitudes, self.window_size)
 

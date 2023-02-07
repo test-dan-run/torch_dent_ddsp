@@ -5,8 +5,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch
 import pytorch_lightning as pl
 
-from model import DENT
-from loss import SpectralLoss
+from src.model import DENT
+from src.loss import SpectralLoss
 
 class LightningDENT(pl.LightningModule):
     def __init__(self, cfg: DictConfig):
@@ -17,10 +17,7 @@ class LightningDENT(pl.LightningModule):
         self.model = DENT(**cfg.model)
         self.loss_fn = SpectralLoss()
 
-    def forward(self, batch):
-        
-        x, _ = batch 
-
+    def forward(self, x):
         return self.model(x)
 
     # TODO: for inference
@@ -33,7 +30,7 @@ class LightningDENT(pl.LightningModule):
         out = self.model(x)
 
         loss = self.loss_fn(out, y)
-        self.log('train_loss', loss, on_step=True, on_epoch=False, sync_dist=self.run_cfg.distributed)
+        self.log('train_loss', loss, on_step=True, on_epoch=False, sync_dist=self.cfg.run.distributed)
 
         return loss
 
@@ -43,7 +40,7 @@ class LightningDENT(pl.LightningModule):
         out = self.model(x)
         
         loss = self.loss_fn(out, y)
-        self.log('valid_loss', loss, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
+        self.log('valid_loss', loss, on_step=False, on_epoch=True, sync_dist=self.cfg.run.distributed)
         
         return {'predictions': out, 'labels': y, 'loss': loss}	
 
@@ -53,15 +50,15 @@ class LightningDENT(pl.LightningModule):
         out = self.model(x)
         
         loss = self.loss_fn(out, y)
-        self.log('test_loss', loss, on_step=False, on_epoch=True, sync_dist=self.run_cfg.distributed)
+        self.log('test_loss', loss, on_step=False, on_epoch=True, sync_dist=self.cfg.run.distributed)
         
         return {'predictions': out, 'labels': y, 'loss': loss}	
 
     def configure_optimizers(self):
 
-        optimizer = Adam(self.parameters(), lr=self.cfg.optim.lr)
+        optim = Adam(self.parameters(), lr=self.cfg.optim.lr)
         scheduler = ReduceLROnPlateau(
-            optimizer = optimizer,
+            optimizer = optim,
             mode = self.cfg.optim.mode,
             factor = self.cfg.optim.factor,
             patience = self.cfg.optim.patience,
@@ -70,7 +67,7 @@ class LightningDENT(pl.LightningModule):
         )
 
         return {
-            'optimizer': optimizer,
+            'optimizer': optim,
             'monitor': 'valid_loss',
             'lr_scheduler': scheduler,
             'interval': self.cfg.optim.interval
@@ -109,6 +106,9 @@ if __name__ == '__main__':
             'cooldown': 0,
             'eps': 1.0e-7,
             'interval': 'epoch'
+        },
+        'run': {
+            'distributed': False
         }
     }
 

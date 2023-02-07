@@ -1,7 +1,7 @@
 import torch
 from typing import Dict
 
-from core import DynamicRangeCompressor, FIRFilter, FilteredNoise, Distortion
+from src.core import DynamicRangeCompressor, FIRFilter, FilteredNoise, Distortion
 
 class DENT(torch.nn.Module):
     def __init__(
@@ -20,8 +20,7 @@ class DENT(torch.nn.Module):
         self.noise = FilteredNoise(**noise_config) if noise_config is not None else None
         self.noise_adjustment = noise_adjustment 
 
-    def __call__(self, audio: torch.Tensor) -> torch.Tensor:
-        
+    def __call__(self, audio: torch.Tensor) -> torch.Tensor: 
         output = audio
         if self.waveshaper:
             output = self.waveshaper(output)

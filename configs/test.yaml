@@ -1,3 +1,7 @@
+hydra:
+  run:
+    dir: '.'
+
 dataset:
   train_manifest_path: /mnt/d/datasets/noisy_aug/train_manifest.json
   valid_manifest_path: /mnt/d/datasets/noisy_aug/valid_manifest.json
