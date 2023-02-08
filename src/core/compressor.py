@@ -85,14 +85,14 @@ class DynamicRangeCompressor(torch.nn.Module):
             )
         gain = compressed_audio_db - audio_db # [batch, length]
         gain_downsampled = F.interpolate(gain, scale_factor=1/self.downsample_factor, mode = 'linear')
-        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size()).to('cuda')
+        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size())
 
         prev_step = gain_downsampled[:,:, 0]
         audio_len = gain_downsampled.size(2)
         for i in range(audio_len):
             target_step = gain_downsampled[:,:,i]
             smooth_factor = gain_smoothing(target_step, prev_step, self.attack_time, self.release_time)
-            prev_step = smooth_factor * (prev_step - target_step) * target_step
+            prev_step = smooth_factor * (prev_step - target_step) + target_step
             gain_downsampled_smoothed[:,:,i] = prev_step
 
         gain_downsampled_smoothed_upsampled = upsample_with_windows(gain_downsampled, int(self.downsample_factor))
