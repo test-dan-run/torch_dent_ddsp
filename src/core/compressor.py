@@ -51,11 +51,7 @@ def upsample_with_windows(
 
 def gain_smoothing(target_step: torch.Tensor, prev_step: torch.Tensor, attack_time: torch.Tensor, release_time: torch.Tensor) -> torch.Tensor:
 
-    return torch.where(
-                target_step >= prev_step, 
-                attack_time  * prev_step + (1 - attack_time ) * target_step, 
-                release_time * prev_step + (1 - release_time) * target_step
-                )
+    return torch.where(target_step >= prev_step, attack_time, release_time)
 
 class DynamicRangeCompressor(torch.nn.Module):
     def __init__(self, sample_rate: int, threshold: float, ratio: float, makeup: float, attack: float, release: float, downsample_factor: float = 16.0):
@@ -89,11 +85,14 @@ class DynamicRangeCompressor(torch.nn.Module):
             )
         gain = compressed_audio_db - audio_db # [batch, length]
         gain_downsampled = F.interpolate(gain, scale_factor=1/self.downsample_factor, mode = 'linear')
-        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size())
+        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size()).to('cuda')
 
         prev_step = gain_downsampled[:,:, 0]
-        for i in range(gain_downsampled.size(2)):
-            prev_step = gain_smoothing(gain_downsampled[:,:,i], prev_step, self.attack_time, self.release_time)
+        audio_len = gain_downsampled.size(2)
+        for i in range(audio_len):
+            target_step = gain_downsampled[:,:,i]
+            smooth_factor = gain_smoothing(target_step, prev_step, self.attack_time, self.release_time)
+            prev_step = smooth_factor * (prev_step - target_step) * target_step
             gain_downsampled_smoothed[:,:,i] = prev_step
 
         gain_downsampled_smoothed_upsampled = upsample_with_windows(gain_downsampled, int(self.downsample_factor))
