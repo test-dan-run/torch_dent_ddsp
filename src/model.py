@@ -34,7 +34,6 @@ class DENT(torch.nn.Module):
                 adj_linear = 20 ** (self.noise_adjustment/20)
                 noise *= adj_linear
             output = output + noise
-
         return output
 
 if __name__ == '__main__':

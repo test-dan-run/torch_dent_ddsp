@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time
+
 
 from .utils import overlap_and_add
 
@@ -85,7 +87,7 @@ class DynamicRangeCompressor(torch.nn.Module):
             )
         gain = compressed_audio_db - audio_db # [batch, length]
         gain_downsampled = F.interpolate(gain, scale_factor=1/self.downsample_factor, mode = 'linear')
-        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size())
+        gain_downsampled_smoothed = torch.zeros(gain_downsampled.size()).cuda()
 
         prev_step = gain_downsampled[:,:, 0]
         audio_len = gain_downsampled.size(2)

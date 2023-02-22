@@ -1,0 +1,41 @@
+hydra:
+  run:
+    dir: '.'
+
+dataset:
+  manifest_name: train_manifest.json
+  input_manifest_dir: /mnt/c/Users/tjinghua/Desktop/Samples for different languages/Samples/Malay/Generic Conversation/8Khz/Output
+  output_manifest_dir: /mnt/c/Users/tjinghua/Desktop/Samples for different languages/Samples/Malay/Generic Conversation/8Khz/Output_aug
+  random_seed: 42
+model:
+  checkpoint_path: /mnt/d/projects/torch_dent_ddsp/outputs/2023-02-07/10-38-05/logs/lightning_logs/version_0/checkpoints/best.ckpt
+  model:
+    waveshaper_config:
+      threshold: 15.0
+    compressor_config:
+      sample_rate: 16000
+      threshold: -10.0
+      ratio: 30.0
+      makeup: 0.0
+      attack: 1.0e-7
+      release: 1.0e-3
+      downsample_factor: 2.0
+    equalizer_config:
+        n_frequency_bins: 1000
+    noise_config:
+        n_frequency_bins: 1000
+  optim:
+    lr: 5.0e-4
+    mode: min
+    factor: 0.1
+    patience: 5
+    cooldown: 0
+    eps: 1.0e-7
+    interval: epoch
+  run:
+    distributed: False
+run:
+  num_gpus: 1
+  epochs: 100
+  batch_size: 4
+  logs_dir: logs/

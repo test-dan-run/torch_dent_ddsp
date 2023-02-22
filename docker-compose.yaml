@@ -1,0 +1,19 @@
+version: '3.9'
+
+services:
+
+  local:
+    stdin_open: true
+    tty: true
+    image: dleongsh/torchaudio:1.13.1-cuda11.6-cudnn8-runtime
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    volumes:
+      - ./:/workspace
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    shm_size: 16gb
